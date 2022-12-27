@@ -287,11 +287,13 @@ mod tests {
         #[async_trait]
         impl TmClient for WebsocketClient{
             type Sub = MockSubscription;
-            type Tx = Vec<u8>;
+            //type Tx = Vec<u8>;
 
             async fn subscribe(&self, query: Query) -> Result<<Self as TmClient>::Sub, Error>;
             async fn block_results(&self, block_height: Height) -> Result<BlockResponse, Error>;
-            async fn broadcast(&self, tx_raw: <Self as TmClient>::Tx) -> Result<TxResponse, Error>;
+            async fn broadcast(&self, tx_raw: Vec<u8>) -> Result<BroadcastResponse, Error>;
+            async fn get_tx(self, tx_hash: tendermint::Hash, prove: bool) -> Result<TxResponse,Error>;
+            async fn get_status(self) -> Result<StatusResponse,Error>;
             fn close(self) -> Result<(), Error>;
         }
     }
