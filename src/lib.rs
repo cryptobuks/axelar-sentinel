@@ -39,6 +39,7 @@ pub async fn run(_cfg: config::Config) -> Result<(), Error> {
     let options = broadcaster::BroadcastOptions{
         tx_fetch_interval: std::time::Duration::new(5, 0),
         tx_fetch_max_retries: 10,
+        sim_sequence_mismatch_retries: 5,
         gas_adjustment: 1.5,
     };
 
