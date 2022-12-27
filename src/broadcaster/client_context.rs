@@ -7,7 +7,7 @@ use error_stack::{IntoReport, ResultExt, Result};
 use thiserror::Error;
 
 use crate::client_context::ClientContextError::*;
-use crate::broadcaster::simulate;
+use crate::broadcaster::helpers::simulate;
 
 #[derive(Error, Debug)]
 pub enum ClientContextError {
