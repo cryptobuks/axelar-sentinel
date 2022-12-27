@@ -22,7 +22,6 @@ pub type EventType = tendermint_rpc::query::EventType;
 #[async_trait]
 pub trait TmClient {
     type Sub: Stream<Item = core::result::Result<Event, Error>> + Unpin;
-    //type Tx: Into<Vec<u8>>;
 
     async fn subscribe(&self, query: Query) -> Result<Self::Sub, Error>;
     async fn block_results(&self, block_height: Height) -> Result<BlockResponse, Error>;
@@ -35,7 +34,6 @@ pub trait TmClient {
 #[async_trait]
 impl TmClient for WebSocketClient {
     type Sub = Subscription;
-    //type Tx = Vec<u8>;
 
     async fn subscribe(&self, query: Query) -> Result<Self::Sub, Error> {
         SubscriptionClient::subscribe(self, query).map_err(Report::new).await

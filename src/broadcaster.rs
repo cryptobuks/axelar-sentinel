@@ -9,7 +9,7 @@ use thiserror::Error;
 
 use cosmrs::tx::{BodyBuilder, SignerInfo, Fee, SignDoc, Raw};
 use cosmrs::crypto::{PublicKey,secp256k1::SigningKey};
-use cosmrs::Coin;
+use cosmrs::{Coin, Denom};
 use tendermint::chain::Id;
 use tendermint::Hash;
 
@@ -39,22 +39,22 @@ pub enum BroadcasterError {
 
 #[derive(Clone, Copy)]
 pub struct BroadcastOptions {
-    tx_fetch_interval: Duration,
-    tx_fetch_max_retries: u32,
-    gas_adjustment: f32,
+    pub tx_fetch_interval: Duration,
+    pub tx_fetch_max_retries: u32,
+    pub gas_adjustment: f32,
 }
 
-pub struct Broadcaster<T: TmClient + Copy, C: ClientContext> {
+pub struct Broadcaster<T: TmClient + Clone, C: ClientContext> {
     node: T,
     client_context: C,
     priv_key: SigningKey,
     options: BroadcastOptions,
-    gas_price: Coin,
+    gas_price: (f64, Denom),
     chain_id: Option<Id>,
 }
 
-impl<T: TmClient + Copy, C: ClientContext> Broadcaster<T,C> {
-    pub fn new(node: T, options: BroadcastOptions, context: C, priv_key: SigningKey, gas_price: Coin) -> Self {
+impl<T: TmClient + Clone, C: ClientContext> Broadcaster<T,C> {
+    pub fn new(node: T, context: C, options: BroadcastOptions, priv_key: SigningKey, gas_price: (f64,Denom)) -> Self {
         Broadcaster { node, options, client_context: context, priv_key, gas_price, chain_id: None}
     }
 
@@ -66,7 +66,7 @@ impl<T: TmClient + Copy, C: ClientContext> Broadcaster<T,C> {
         }
 
         if self.chain_id.is_none() {
-            self.chain_id = Some(self.node.get_status().await.change_context(ContextUpdateFailed)?.node_info.network);
+            self.chain_id = Some(self.node.clone().get_status().await.change_context(ContextUpdateFailed)?.node_info.network);
         }
 
         let sequence = self.client_context.sequence().ok_or(ContextUpdateFailed)?;
@@ -74,33 +74,38 @@ impl<T: TmClient + Copy, C: ClientContext> Broadcaster<T,C> {
         let chain_id = self.chain_id.clone().ok_or(ContextUpdateFailed)?;
         let gas_adjustment = self.options.gas_adjustment;
 
-        let tx_bytes = generate_sim_tx(msgs.clone(), sequence, self.priv_key.public_key())?;
+        let tx_bytes = generate_sim_tx(msgs.clone(), sequence, &self.priv_key.public_key())?;
         let estimated_gas = self.client_context.estimate_gas(tx_bytes).await.change_context(GasEstimationFailed)?;
         
-        let mut gas_wanted = estimated_gas;
+        let mut gas_limit = estimated_gas;
         if self.options.gas_adjustment > 0.0 {
-            gas_wanted = (gas_wanted as f64 * gas_adjustment as f64) as u64;
+            gas_limit = (gas_limit as f64 * gas_adjustment as f64) as u64;
         }
 
-        let fee = Fee::from_amount_and_gas(self.gas_price.clone(), gas_wanted);
+        let (value,denom) = self.gas_price.clone();
+        let amount = cosmrs::Coin{
+            amount:  (gas_limit as f64 * value).ceil() as u128,
+            denom: denom,
+        };
+
+        let fee = Fee::from_amount_and_gas(amount, gas_limit);
         let tx_bytes= generate_tx(msgs.clone(), &self.priv_key, account_number, sequence, fee, chain_id)?;
         let response = self.node.broadcast(tx_bytes).await.change_context(ConnectionFailed)?;
 
-        wait_for_block_inclusion(self.node, response.hash, self.options).await?;
+        wait_for_block_inclusion(self.node.clone(), response.hash, self.options).await?;
 
         Ok(response)
 
     }
 }
 
-pub fn generate_sim_tx<M>(msgs: M, sequence: u64, pub_key: PublicKey) -> Result<Vec<u8>,BroadcasterError>
+pub fn generate_sim_tx<M>(msgs: M, sequence: u64, pub_key: &PublicKey) -> Result<Vec<u8>,BroadcasterError>
 where M: IntoIterator<Item = cosmrs::Any>,
-//where M: Into<cosmrs::Any>,
 {
 
     let body = BodyBuilder::new().msgs(msgs).finish();
     let fee = Fee::from_amount_and_gas(Coin::new(0u8.into(), "").unwrap(), 0u64);
-    let auth_info = SignerInfo::single_direct(Some(pub_key), sequence).auth_info(fee);
+    let auth_info = SignerInfo::single_direct(Some(pub_key.clone()), sequence).auth_info(fee);
     let body_bytes = body.clone().into_bytes().into_report().change_context(TxMarshalingFailed)?;
     let auth_info_bytes = auth_info.clone().into_bytes().into_report().change_context(TxMarshalingFailed)?;
 
@@ -115,9 +120,7 @@ where M: IntoIterator<Item = cosmrs::Any>,
 
 pub fn generate_tx<M>(msgs: M, priv_key: &SigningKey, account_number: u64, sequence: u64, fee: Fee, chain_id: Id) -> Result<Vec<u8>,BroadcasterError>
 where M: IntoIterator<Item = cosmrs::Any>,
-//where M: Into<cosmrs::Any>,
 {
-    //let priv_key = SigningKey::from_bytes(priv_key_bytes).into_report().change_context(TxMarshalingFailed)?;
     let pub_key = priv_key.public_key();
     let auth_info = SignerInfo::single_direct(Some(pub_key), sequence).auth_info(fee);
     let body = BodyBuilder::new().msgs(msgs).finish();
@@ -129,13 +132,13 @@ where M: IntoIterator<Item = cosmrs::Any>,
 
 
 pub async fn wait_for_block_inclusion<C>(tm_client: C, tx_hash:  Hash, options:  BroadcastOptions) -> Result<(),BroadcasterError>
-where C: TmClient + Copy,
+where C: TmClient + Clone,
 {
     let mut last_error = Report::new(BlockInclusionTimeout);
 
     for _ in 0..options.tx_fetch_max_retries {
         thread::sleep(options.tx_fetch_interval);
-        match tm_client.get_tx(tx_hash.clone(), true).await {
+        match tm_client.clone().get_tx(tx_hash.clone(), true).await {
             Ok(_) => return Ok(()),
             Err(err) => {
                 last_error = err.change_context(BlockInclusionTimeout);
@@ -214,8 +217,11 @@ mod tests {
         .unwrap();
       
 
-        let res = generate_sim_tx(iter::once(msg_send), 0, SigningKey::from_bytes(&priv_key_bytes).expect("panic!").public_key());
-        
+        let res = generate_sim_tx(
+            iter::once(msg_send),
+            0,
+            &SigningKey::from_bytes(&priv_key_bytes).expect("panic!").public_key()
+        );
 
         assert!(res.is_ok());
 
@@ -234,8 +240,6 @@ mod tests {
             .public_key()
             .account_id(ACC_PREFIX)
             .unwrap();
-    
-            
 
         let amount = Coin {
             amount: 1u8.into(),
@@ -255,8 +259,14 @@ mod tests {
         let gas = 100_000u64;
         let fee = Fee::from_amount_and_gas(amount, gas);
 
-
-        let res = generate_tx(iter::once(msg_send), &priv_key, ACC_NUMBER,seq_number, fee, chain_id);        
+        let res = generate_tx(
+            iter::once(msg_send),
+            &priv_key,
+            ACC_NUMBER,
+            seq_number,
+            fee,
+            chain_id
+        );        
 
         assert!(res.is_ok());
 
