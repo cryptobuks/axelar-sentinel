@@ -272,13 +272,13 @@ mod tests {
     }
 
     mock! {
-            Subscription{}
+        Subscription{}
 
-            impl Stream for Subscription {
-                type Item = core::result::Result<Event, Error>;
+        impl Stream for Subscription {
+            type Item = core::result::Result<Event, Error>;
 
-                fn poll_next<'a>(self: Pin<&mut Self>, cx: &mut Context<'a>) -> Poll<Option<<Self as Stream>::Item>>;
-            }
+            fn poll_next<'a>(self: Pin<&mut Self>, cx: &mut Context<'a>) -> Poll<Option<<Self as Stream>::Item>>;
+        }
     }
 
     mock! {
@@ -287,7 +287,6 @@ mod tests {
         #[async_trait]
         impl TmClient for WebsocketClient{
             type Sub = MockSubscription;
-            //type Tx = Vec<u8>;
 
             async fn subscribe(&self, query: Query) -> Result<<Self as TmClient>::Sub, Error>;
             async fn block_results(&self, block_height: Height) -> Result<BlockResponse, Error>;
