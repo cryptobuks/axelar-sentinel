@@ -12,7 +12,7 @@ use crate::tm_client::{TmClient};
 
 use tendermint::Hash;
 
-use crate::broadcaster::{BroadcastOptions, BroadcasterError, BroadcasterError::*};
+use crate::broadcaster::{BroadcasterError, BroadcasterError::*};
 
 use super::client_context::{ClientContextError};
 
