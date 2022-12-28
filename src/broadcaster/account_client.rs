@@ -6,11 +6,11 @@ use cosmos_sdk_proto::cosmos::auth::v1beta1::{QueryAccountRequest, BaseAccount};
 use error_stack::{IntoReport, ResultExt, Result};
 use thiserror::Error;
 
-use crate::account_client::ClientContextError::*;
+use crate::account_client::AccountClientError::*;
 use crate::broadcaster::helpers::simulate;
 
 #[derive(Error, Debug)]
-pub enum ClientContextError {
+pub enum AccountClientError {
     #[error("failed to connect to node")]
     ConnectionFailed,
     #[error("remote call failed")]
@@ -27,8 +27,8 @@ pub enum ClientContextError {
 pub trait AccountClient {
     fn sequence(&self) -> Option<u64>;
     fn account_number(&self) -> Option<u64>;
-    async fn update_account_info(&mut self) -> Result<(),ClientContextError>;
-    async fn estimate_gas(&self, tx_bytes: Vec<u8>) -> Result<u64,ClientContextError>;
+    async fn update(&mut self) -> Result<(),AccountClientError>;
+    async fn estimate_gas(&self, tx_bytes: Vec<u8>) -> Result<u64,AccountClientError>;
 }
 
 
@@ -57,7 +57,7 @@ impl AccountClient for GrpcAccountClient {
         self.account_info.clone().map(|info | info.account_number)
     }
 
-    async fn update_account_info(&mut self) -> Result<(),ClientContextError> {
+    async fn update(&mut self) -> Result<(),AccountClientError> {
 
         let request = QueryAccountRequest{address: self.address.clone()};
 
@@ -78,7 +78,7 @@ impl AccountClient for GrpcAccountClient {
 
     }
 
-    async fn estimate_gas(&self, tx_bytes: Vec<u8>) -> Result<u64,ClientContextError> {
+    async fn estimate_gas(&self, tx_bytes: Vec<u8>) -> Result<u64,AccountClientError> {
         simulate(self.grpc_url.clone(), tx_bytes).await?
         .gas_info.ok_or(TxSimulationFailed)
         .map(| info | info.gas_used).into_report()

@@ -14,7 +14,7 @@ use tendermint::Hash;
 
 use crate::broadcaster::{BroadcasterError, BroadcasterError::*};
 
-use super::account_client::{ClientContextError};
+use super::account_client::{AccountClientError};
 
 const SEQ_MISMATCH_CODE: i32 = 32;
 
@@ -69,22 +69,22 @@ where C: TmClient + Clone,
     Err(last_error)
 }
 
-pub async fn simulate(grpc_url: String, tx_bytes: Vec<u8>) -> Result<SimulateResponse,ClientContextError> {
+pub async fn simulate(grpc_url: String, tx_bytes: Vec<u8>) -> Result<SimulateResponse,AccountClientError> {
         let request = SimulateRequest{
             tx: None,
             tx_bytes,
         };
 
         let mut client = ServiceClient::connect(grpc_url)
-            .await.into_report().change_context(ClientContextError::ConnectionFailed)?;
+            .await.into_report().change_context(AccountClientError::ConnectionFailed)?;
 
         match client.simulate(request).await {
             Ok(response) => Ok(response.into_inner()),
             Err(err) => {
                 if err.code() == SEQ_MISMATCH_CODE.into() {
-                    return Err(err).into_report().change_context(ClientContextError::AccountSequenceMismatch)
+                    return Err(err).into_report().change_context(AccountClientError::AccountSequenceMismatch)
                 } 
-                Err(err).into_report().change_context(ClientContextError::TxSimulationFailed)
+                Err(err).into_report().change_context(AccountClientError::TxSimulationFailed)
             },
         }
     }

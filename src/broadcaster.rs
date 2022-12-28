@@ -59,7 +59,7 @@ impl<T: TmClient + Clone, C: account_client::AccountClient> Broadcaster<T,C> {
     where M: IntoIterator<Item = cosmrs::Any> + Clone,
     {
         if self.account_client.sequence().is_none() || self.account_client.account_number().is_none() {
-            self.account_client.update_account_info().await.change_context(ContextUpdateFailed)?;
+            self.account_client.update().await.change_context(ContextUpdateFailed)?;
         }
 
         if self.chain_id.is_none() {
@@ -70,8 +70,8 @@ impl<T: TmClient + Clone, C: account_client::AccountClient> Broadcaster<T,C> {
         let chain_id = self.chain_id.clone().ok_or(ContextUpdateFailed)?;
         let gas_adjustment = self.options.gas_adjustment;
 
-        let mut sequence = self.account_client.sequence().ok_or(ContextUpdateFailed)?;
-        let mut estimated_gas: u64 = 0;
+        let mut sequence = 0;
+        let mut estimated_gas = 0;
         let mut last_error = Report::new(UnresolvedAccountSequenceMismatch);
 
         // retry tx simulation in case there are sequence mismatches
@@ -86,9 +86,9 @@ impl<T: TmClient + Clone, C: account_client::AccountClient> Broadcaster<T,C> {
                 }
                 Err(err) => {
                     match err.current_context() {
-                        account_client::ClientContextError::AccountSequenceMismatch => {
+                        account_client::AccountClientError::AccountSequenceMismatch => {
                             last_error = err.change_context(UnresolvedAccountSequenceMismatch);
-                            self.account_client.update_account_info().await.change_context(ContextUpdateFailed)?;
+                            self.account_client.update().await.change_context(ContextUpdateFailed)?;
                             continue;
                         }
                         _ => return Err(err).change_context(GasEstimationFailed),
@@ -131,7 +131,7 @@ impl<T: TmClient + Clone, C: account_client::AccountClient> Broadcaster<T,C> {
         ).await?;
 
         //update sequence number
-        self.account_client.update_account_info().await.change_context(ContextUpdateFailed)?;
+        self.account_client.update().await.change_context(ContextUpdateFailed)?;
 
         Ok(response)
 
