@@ -3,7 +3,7 @@ use tendermint_rpc::{SubscriptionClient, WebSocketClient};
 
 use crate::report::Error;
 use crate::broadcaster::*;
-use crate::broadcaster::client_context::*;
+use crate::broadcaster::account_client::*;
 
 use cosmrs::crypto::secp256k1::SigningKey;
 use cosmrs::Coin;
@@ -23,7 +23,7 @@ pub async fn run(_cfg: config::Config) -> Result<(), Error> {
 
     //test account
     let address = "axelar1y7zhht60mr392ffkhpdj5tunlcap2rhx3tsnqw";
-    let mut cc = GrpcClientContext::new(String::from(address), String::from(grpc_url));
+    let mut cc = GrpcAccountClient::new(String::from(address), String::from(grpc_url));
     cc.update_account_info().await.expect("failed to fetch account info");
     let sequence = cc.sequence().unwrap();
     println!("{} current sequence number is {:?}", address, sequence);

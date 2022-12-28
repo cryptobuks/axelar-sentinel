@@ -11,9 +11,8 @@ use tendermint::chain::Id;
 
 use crate::broadcaster::BroadcasterError::*;
 use crate::tm_client::{TmClient, BroadcastResponse};
-use crate::ClientContext;
 
-pub mod client_context;
+pub mod account_client;
 mod helpers;
 
 #[derive(Error, Debug)]
@@ -43,53 +42,53 @@ pub struct BroadcastOptions {
     pub gas_price: (f64, Denom),
 }
 
-pub struct Broadcaster<T: TmClient + Clone, C: ClientContext> {
-    node: T,
-    client_context: C,
+pub struct Broadcaster<T: TmClient + Clone, A: account_client::AccountClient> {
+    tm_client: T,
+    account_client: A,
     priv_key: SigningKey,
     options: BroadcastOptions,
     chain_id: Option<Id>,
 }
 
-impl<T: TmClient + Clone, C: ClientContext> Broadcaster<T,C> {
-    pub fn new(node: T, context: C, options: BroadcastOptions, priv_key: SigningKey) -> Self {
-        Broadcaster { node, options, client_context: context, priv_key, chain_id: None}
+impl<T: TmClient + Clone, C: account_client::AccountClient> Broadcaster<T,C> {
+    pub fn new(tm_client: T, account_client: C, options: BroadcastOptions, priv_key: SigningKey) -> Self {
+        Broadcaster { tm_client, account_client, options, priv_key, chain_id: None}
     }
 
     pub async fn broadcast<M>(&mut self, msgs: M) -> Result<BroadcastResponse,BroadcasterError>
     where M: IntoIterator<Item = cosmrs::Any> + Clone,
     {
-        if self.client_context.sequence().is_none() || self.client_context.account_number().is_none() {
-            self.client_context.update_account_info().await.change_context(ContextUpdateFailed)?;
+        if self.account_client.sequence().is_none() || self.account_client.account_number().is_none() {
+            self.account_client.update_account_info().await.change_context(ContextUpdateFailed)?;
         }
 
         if self.chain_id.is_none() {
-            self.chain_id = Some(self.node.clone().get_status().await.change_context(ContextUpdateFailed)?.node_info.network);
+            self.chain_id = Some(self.tm_client.clone().get_status().await.change_context(ContextUpdateFailed)?.node_info.network);
         }
         
-        let account_number = self.client_context.account_number().ok_or(ContextUpdateFailed)?;
+        let account_number = self.account_client.account_number().ok_or(ContextUpdateFailed)?;
         let chain_id = self.chain_id.clone().ok_or(ContextUpdateFailed)?;
         let gas_adjustment = self.options.gas_adjustment;
 
-        let mut sequence = self.client_context.sequence().ok_or(ContextUpdateFailed)?;
+        let mut sequence = self.account_client.sequence().ok_or(ContextUpdateFailed)?;
         let mut estimated_gas: u64 = 0;
         let mut last_error = Report::new(UnresolvedAccountSequenceMismatch);
 
         // retry tx simulation in case there are sequence mismatches
         for _ in 0..self.options.sim_sequence_mismatch_retries {
-            sequence = self.client_context.sequence().ok_or(ContextUpdateFailed)?;
+            sequence = self.account_client.sequence().ok_or(ContextUpdateFailed)?;
             let tx_bytes = helpers::generate_sim_tx(msgs.clone(), sequence, &self.priv_key.public_key())?;
 
-            match self.client_context.estimate_gas(tx_bytes.clone()).await {
+            match self.account_client.estimate_gas(tx_bytes.clone()).await {
                 Ok(gas) => {
                     estimated_gas = gas;
                     break;
                 }
                 Err(err) => {
                     match err.current_context() {
-                        client_context::ClientContextError::AccountSequenceMismatch => {
+                        account_client::ClientContextError::AccountSequenceMismatch => {
                             last_error = err.change_context(UnresolvedAccountSequenceMismatch);
-                            self.client_context.update_account_info().await.change_context(ContextUpdateFailed)?;
+                            self.account_client.update_account_info().await.change_context(ContextUpdateFailed)?;
                             continue;
                         }
                         _ => return Err(err).change_context(GasEstimationFailed),
@@ -122,17 +121,17 @@ impl<T: TmClient + Clone, C: ClientContext> Broadcaster<T,C> {
             fee,
             chain_id
         )?;
-        let response = self.node.broadcast(tx_bytes).await.change_context(ConnectionFailed)?;
+        let response = self.tm_client.broadcast(tx_bytes).await.change_context(ConnectionFailed)?;
 
         helpers::wait_for_block_inclusion(
-            self.node.clone(),
+            self.tm_client.clone(),
             response.hash,
             self.options.tx_fetch_interval,
             self.options.tx_fetch_max_retries,
         ).await?;
 
         //update sequence number
-        self.client_context.update_account_info().await.change_context(ContextUpdateFailed)?;
+        self.account_client.update_account_info().await.change_context(ContextUpdateFailed)?;
 
         Ok(response)
 

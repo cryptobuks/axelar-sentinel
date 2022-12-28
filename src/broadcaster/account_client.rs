@@ -6,7 +6,7 @@ use cosmos_sdk_proto::cosmos::auth::v1beta1::{QueryAccountRequest, BaseAccount};
 use error_stack::{IntoReport, ResultExt, Result};
 use thiserror::Error;
 
-use crate::client_context::ClientContextError::*;
+use crate::account_client::ClientContextError::*;
 use crate::broadcaster::helpers::simulate;
 
 #[derive(Error, Debug)]
@@ -24,7 +24,7 @@ pub enum ClientContextError {
 }
 
 #[async_trait]
-pub trait ClientContext {
+pub trait AccountClient {
     fn sequence(&self) -> Option<u64>;
     fn account_number(&self) -> Option<u64>;
     async fn update_account_info(&mut self) -> Result<(),ClientContextError>;
@@ -32,16 +32,15 @@ pub trait ClientContext {
 }
 
 
-pub struct GrpcClientContext{
+pub struct GrpcAccountClient{
     grpc_url: String,
     address: String,
     account_info: Option<BaseAccount>,
 }
 
-
-impl GrpcClientContext {
-    pub fn new(address: String, grpc_url: String) -> impl ClientContext {
-        GrpcClientContext{
+impl GrpcAccountClient {
+    pub fn new(address: String, grpc_url: String) -> impl AccountClient {
+        GrpcAccountClient{
             grpc_url: grpc_url.clone(),
             address: address.clone(),
             account_info: None}
@@ -49,7 +48,7 @@ impl GrpcClientContext {
 }
 
 #[async_trait]
-impl ClientContext for GrpcClientContext {
+impl AccountClient for GrpcAccountClient {
     fn sequence(&self) -> Option<u64> {
        self.account_info.clone().map(|info | info.sequence)
     }

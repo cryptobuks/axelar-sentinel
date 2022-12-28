@@ -14,7 +14,7 @@ use tendermint::Hash;
 
 use crate::broadcaster::{BroadcasterError, BroadcasterError::*};
 
-use super::client_context::{ClientContextError};
+use super::account_client::{ClientContextError};
 
 const SEQ_MISMATCH_CODE: i32 = 32;
 
