@@ -34,12 +34,13 @@ pub enum BroadcasterError {
     GasEstimationFailed,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub struct BroadcastOptions {
     pub tx_fetch_interval: Duration,
     pub tx_fetch_max_retries: u32,
     pub sim_sequence_mismatch_retries: u32,
     pub gas_adjustment: f32,
+    pub gas_price: (f64, Denom),
 }
 
 pub struct Broadcaster<T: TmClient + Clone, C: ClientContext> {
@@ -47,13 +48,12 @@ pub struct Broadcaster<T: TmClient + Clone, C: ClientContext> {
     client_context: C,
     priv_key: SigningKey,
     options: BroadcastOptions,
-    gas_price: (f64, Denom),
     chain_id: Option<Id>,
 }
 
 impl<T: TmClient + Clone, C: ClientContext> Broadcaster<T,C> {
-    pub fn new(node: T, context: C, options: BroadcastOptions, priv_key: SigningKey, gas_price: (f64,Denom)) -> Self {
-        Broadcaster { node, options, client_context: context, priv_key, gas_price, chain_id: None}
+    pub fn new(node: T, context: C, options: BroadcastOptions, priv_key: SigningKey) -> Self {
+        Broadcaster { node, options, client_context: context, priv_key, chain_id: None}
     }
 
     pub async fn broadcast<M>(&mut self, msgs: M) -> Result<BroadcastResponse,BroadcasterError>
@@ -106,17 +106,29 @@ impl<T: TmClient + Clone, C: ClientContext> Broadcaster<T,C> {
             gas_limit = (gas_limit as f64 * gas_adjustment as f64) as u64;
         }
 
-        let (value,denom) = self.gas_price.clone();
+        let (value,denom) = self.options.gas_price.clone();
         let amount = cosmrs::Coin{
             amount:  (gas_limit as f64 * value).ceil() as u128,
             denom: denom,
         };
 
         let fee = Fee::from_amount_and_gas(amount, gas_limit);
-        let tx_bytes= helpers::generate_tx(msgs.clone(), &self.priv_key, account_number, sequence, fee, chain_id)?;
+        let tx_bytes= helpers::generate_tx(
+            msgs.clone(),
+            &self.priv_key,
+            account_number,
+            sequence,
+            fee,
+            chain_id
+        )?;
         let response = self.node.broadcast(tx_bytes).await.change_context(ConnectionFailed)?;
 
-        helpers::wait_for_block_inclusion(self.node.clone(), response.hash, self.options).await?;
+        helpers::wait_for_block_inclusion(
+            self.node.clone(),
+            response.hash,
+            self.options.tx_fetch_interval,
+            self.options.tx_fetch_max_retries,
+        ).await?;
 
         Ok(response)
 

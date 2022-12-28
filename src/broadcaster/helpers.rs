@@ -50,13 +50,13 @@ where M: IntoIterator<Item = cosmrs::Any>,
 }
 
 
-pub async fn wait_for_block_inclusion<C>(tm_client: C, tx_hash:  Hash, options:  BroadcastOptions) -> Result<(),BroadcasterError>
+pub async fn wait_for_block_inclusion<C>(tm_client: C, tx_hash:  Hash, fetch_interval: std::time::Duration, max_retries: u32) -> Result<(),BroadcasterError>
 where C: TmClient + Clone,
 {
     let mut last_error = Report::new(BlockInclusionTimeout);
 
-    for _ in 0..options.tx_fetch_max_retries {
-        thread::sleep(options.tx_fetch_interval);
+    for _ in 0..max_retries {
+        thread::sleep(fetch_interval);
         match tm_client.clone().get_tx(tx_hash.clone(), true).await {
             Ok(_) => return Ok(()),
             Err(err) => {

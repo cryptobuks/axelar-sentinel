@@ -41,6 +41,7 @@ pub async fn run(_cfg: config::Config) -> Result<(), Error> {
         tx_fetch_max_retries: 10,
         sim_sequence_mismatch_retries: 5,
         gas_adjustment: 1.5,
+        gas_price: (0.00005, "ujcs".parse().unwrap()),
     };
 
     let account_id = priv_key.public_key().account_id("axelar").unwrap();
@@ -64,7 +65,7 @@ pub async fn run(_cfg: config::Config) -> Result<(), Error> {
     .to_any()
     .unwrap();
 
-    let mut broadcaster = broadcaster::Broadcaster::new(tm_client.clone(), cc, options, priv_key, (0.00005,"ujcs".parse().unwrap()));
+    let mut broadcaster = broadcaster::Broadcaster::new(tm_client.clone(), cc, options, priv_key);
     let response = broadcaster.broadcast(std::iter::once(msg_send)).await.expect("failed to broadcast!");
     println!("{:?}",response);
 
