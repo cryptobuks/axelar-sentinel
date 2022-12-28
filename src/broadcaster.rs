@@ -66,19 +66,20 @@ impl<T: TmClient + Clone, C: ClientContext> Broadcaster<T,C> {
         if self.chain_id.is_none() {
             self.chain_id = Some(self.node.clone().get_status().await.change_context(ContextUpdateFailed)?.node_info.network);
         }
-
-        let sequence = self.client_context.sequence().ok_or(ContextUpdateFailed)?;
+        
         let account_number = self.client_context.account_number().ok_or(ContextUpdateFailed)?;
         let chain_id = self.chain_id.clone().ok_or(ContextUpdateFailed)?;
         let gas_adjustment = self.options.gas_adjustment;
 
-        let tx_bytes = helpers::generate_sim_tx(msgs.clone(), sequence, &self.priv_key.public_key())?;
-        
+        let mut sequence = self.client_context.sequence().ok_or(ContextUpdateFailed)?;
         let mut estimated_gas: u64 = 0;
         let mut last_error = Report::new(UnresolvedAccountSequenceMismatch);
 
         // retry tx simulation in case there are sequence mismatches
         for _ in 0..self.options.sim_sequence_mismatch_retries {
+            sequence = self.client_context.sequence().ok_or(ContextUpdateFailed)?;
+            let tx_bytes = helpers::generate_sim_tx(msgs.clone(), sequence, &self.priv_key.public_key())?;
+
             match self.client_context.estimate_gas(tx_bytes.clone()).await {
                 Ok(gas) => {
                     estimated_gas = gas;
@@ -129,6 +130,9 @@ impl<T: TmClient + Clone, C: ClientContext> Broadcaster<T,C> {
             self.options.tx_fetch_interval,
             self.options.tx_fetch_max_retries,
         ).await?;
+
+        //update sequence number
+        self.client_context.update_account_info().await.change_context(ContextUpdateFailed)?;
 
         Ok(response)
 

@@ -80,8 +80,7 @@ impl ClientContext for GrpcClientContext {
     }
 
     async fn estimate_gas(&self, tx_bytes: Vec<u8>) -> Result<u64,ClientContextError> {
-        simulate(self.grpc_url.clone(), tx_bytes).await
-        .change_context(TxSimulationFailed)?
+        simulate(self.grpc_url.clone(), tx_bytes).await?
         .gas_info.ok_or(TxSimulationFailed)
         .map(| info | info.gas_used).into_report()
     }

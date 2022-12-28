@@ -66,7 +66,11 @@ pub async fn run(_cfg: config::Config) -> Result<(), Error> {
     .unwrap();
 
     let mut broadcaster = broadcaster::Broadcaster::new(tm_client.clone(), cc, options, priv_key);
-    let response = broadcaster.broadcast(std::iter::once(msg_send)).await.expect("failed to broadcast!");
+    
+    let response = broadcaster.broadcast(std::iter::once(msg_send.clone())).await.expect("failed to broadcast first message!");
+    println!("{:?}",response);
+    
+    let response = broadcaster.broadcast(std::iter::once(msg_send.clone())).await.expect("failed to broadcast second message!");
     println!("{:?}",response);
 
     tm_client.close().unwrap();
