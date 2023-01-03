@@ -39,10 +39,10 @@ pub struct GrpcAccountClient{
 }
 
 impl GrpcAccountClient {
-    pub fn new(address: String, grpc_url: String) -> impl AccountClient {
+    pub fn new(address: String, grpc_url: String) -> Self {
         GrpcAccountClient{
-            grpc_url: grpc_url.clone(),
-            address: address.clone(),
+            grpc_url: grpc_url,
+            address: address,
             account_info: None}
     }
 }
