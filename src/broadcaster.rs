@@ -192,8 +192,6 @@ mod tests {
 
     use tokio::test;
 
-    const PRIV_CONST_KEY: &str = "661fdf5983a27f9ecff7bbc383393cf8bd305b477ade940f83fd22f8e35d6c21";
-
     #[test]
     async fn broadcast_successful() {
         let mut mock_tm_client = MockWebsocketClient::new();
@@ -213,9 +211,7 @@ mod tests {
         mock_gas_estimator.expect_estimate_gas()
         .returning(|_| Ok(1000));
 
-        let mut priv_key_bytes = [0; PRIV_CONST_KEY.len() / 2];
-        hex::decode_to_slice(PRIV_CONST_KEY, &mut priv_key_bytes).unwrap();
-        let priv_key = SigningKey::from_bytes(&priv_key_bytes).unwrap();
+        let priv_key = SigningKey::random();
         let account_id = priv_key.public_key().account_id("axelar").unwrap();
 
         let recipient_private_key = SigningKey::random();
@@ -259,9 +255,7 @@ mod tests {
         mock_gas_estimator.expect_estimate_gas()
         .returning(|_| Ok(1000));
 
-        let mut priv_key_bytes = [0; PRIV_CONST_KEY.len() / 2];
-        hex::decode_to_slice(PRIV_CONST_KEY, &mut priv_key_bytes).unwrap();
-        let priv_key = SigningKey::from_bytes(&priv_key_bytes).unwrap();
+        let priv_key = SigningKey::random();
         let account_id = priv_key.public_key().account_id("axelar").unwrap();
 
         let recipient_private_key = SigningKey::random();
@@ -305,9 +299,7 @@ mod tests {
         mock_gas_estimator.expect_estimate_gas()
         .returning(|_| Err(Report::new(GasEstimatorError::AccountSequenceMismatch)));
 
-        let mut priv_key_bytes = [0; PRIV_CONST_KEY.len() / 2];
-        hex::decode_to_slice(PRIV_CONST_KEY, &mut priv_key_bytes).unwrap();
-        let priv_key = SigningKey::from_bytes(&priv_key_bytes).unwrap();
+        let priv_key = SigningKey::random();
         let account_id = priv_key.public_key().account_id("axelar").unwrap();
 
         let recipient_private_key = SigningKey::random();
@@ -363,9 +355,7 @@ mod tests {
         mock_gas_estimator.expect_estimate_gas()
         .returning(|_| Ok(1000));
 
-        let mut priv_key_bytes = [0; PRIV_CONST_KEY.len() / 2];
-        hex::decode_to_slice(PRIV_CONST_KEY, &mut priv_key_bytes).unwrap();
-        let priv_key = SigningKey::from_bytes(&priv_key_bytes).unwrap();
+        let priv_key = SigningKey::random();
         let account_id = priv_key.public_key().account_id("axelar").unwrap();
 
         let recipient_private_key = SigningKey::random();

@@ -83,14 +83,11 @@ mod tests {
     const ACC_NUMBER: AccountNumber = 1;
     const ACC_PREFIX: &str = "axelar";
     const DENOM: &str = "uaxl";
-    const PRIV_CONST_KEY: &str = "661fdf5983a27f9ecff7bbc383393cf8bd305b477ade940f83fd22f8e35d6c21";
-
 
     #[test]
     fn marshal_sim_tx_success() {
-        let mut priv_key_bytes = [0; PRIV_CONST_KEY.len() / 2];
-        hex::decode_to_slice(PRIV_CONST_KEY, &mut priv_key_bytes).expect("Decoding failed");
-        let account_id = SigningKey::from_bytes(&priv_key_bytes).expect("panic!").public_key().account_id(ACC_PREFIX).unwrap();
+        let priv_key = SigningKey::random();
+        let account_id = priv_key.public_key().account_id(ACC_PREFIX).unwrap();
     
         let recipient_private_key = SigningKey::random();
         let recipient_account_id = recipient_private_key
@@ -116,7 +113,7 @@ mod tests {
         let res = generate_sim_tx(
             iter::once(msg_send),
             0,
-            &SigningKey::from_bytes(&priv_key_bytes).expect("panic!").public_key()
+            &priv_key.public_key()
         );
 
         assert!(res.is_ok());
@@ -126,9 +123,7 @@ mod tests {
 
     #[test]
     fn marshal_tx_success() {
-        let mut priv_key_bytes = [0; PRIV_CONST_KEY.len() / 2];
-        hex::decode_to_slice(PRIV_CONST_KEY, &mut priv_key_bytes).expect("Decoding failed");
-        let priv_key = SigningKey::from_bytes(&priv_key_bytes).expect("panic!");
+        let priv_key = SigningKey::random();
         let account_id = priv_key.public_key().account_id(ACC_PREFIX).unwrap();
     
         let recipient_private_key = SigningKey::random();
