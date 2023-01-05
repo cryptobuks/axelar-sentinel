@@ -294,7 +294,6 @@ mod tests {
             async fn block_results(&self, block_height: Height) -> Result<BlockResponse, TmClientError>;
             async fn broadcast(&self, tx_raw: Vec<u8>) -> Result<BroadcastResponse, TmClientError>;
             async fn get_tx_height(&self, tx_hash: Hash, prove: bool) -> Result<Height,TmClientError>;
-            async fn get_network(&self) -> Result<Id,TmClientError>;
             fn close(self) -> Result<(), TmClientError>;
         }
     }
