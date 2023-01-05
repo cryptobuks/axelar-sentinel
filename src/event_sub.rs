@@ -162,7 +162,9 @@ mod tests {
     use futures::Stream;
     use mockall::mock;
     use mockall::predicate;
+    use tendermint::Hash;
     use tendermint::block::Height;
+    use tendermint::chain::Id;
     use tokio::sync::oneshot;
     use tokio::test;
 
@@ -291,8 +293,8 @@ mod tests {
             async fn subscribe(&self, query: Query) -> Result<<Self as TmClient>::Sub, Error>;
             async fn block_results(&self, block_height: Height) -> Result<BlockResponse, Error>;
             async fn broadcast(&self, tx_raw: Vec<u8>) -> Result<BroadcastResponse, Error>;
-            async fn get_tx(self, tx_hash: tendermint::Hash, prove: bool) -> Result<TxResponse,Error>;
-            async fn get_status(self) -> Result<StatusResponse,Error>;
+            async fn get_tx_height(&self, tx_hash: Hash, prove: bool) -> Result<Height,Error>;
+            async fn get_network(&self) -> Result<Id,Error>;
             fn close(self) -> Result<(), Error>;
         }
     }

@@ -1,8 +1,7 @@
 use error_stack::Result;
-use tendermint_rpc::{SubscriptionClient, WebSocketClient};
+use tendermint_rpc::{WebSocketClient, Client};
 
 use crate::report::Error;
-use crate::broadcaster::*;
 use crate::broadcaster::account_client::*;
 
 use cosmrs::crypto::secp256k1::SigningKey;
@@ -24,13 +23,16 @@ pub async fn run(_cfg: config::Config) -> Result<(), Error> {
     //test account
     let address = "axelar1y7zhht60mr392ffkhpdj5tunlcap2rhx3tsnqw";
     let mut cc = GrpcAccountClient::new(String::from(address), String::from(grpc_url));
-    cc.update().await.expect("failed to fetch account info");
+    cc.init().await.expect("failed to fetch account info");
     let sequence = cc.sequence().unwrap();
     println!("{} current sequence number is {:?}", address, sequence);
 
     let (tm_client, tm_driver) = WebSocketClient::new(tm_url).await.expect("error creating http client");
     let driver_handle = tokio::spawn(async move { tm_driver.run().await });
     
+    let status = tm_client.status().await.expect("ufailed to get status");
+    println!("{:?}", status);
+
     const PRIV_CONST_KEY: &str = "661fdf5983a27f9ecff7bbc383393cf8bd305b477ade940f83fd22f8e35d6c21";
     let mut priv_key_bytes = [0; PRIV_CONST_KEY.len() / 2];
     hex::decode_to_slice(PRIV_CONST_KEY, &mut priv_key_bytes).expect("Decoding failed");
@@ -39,7 +41,6 @@ pub async fn run(_cfg: config::Config) -> Result<(), Error> {
     let options = broadcaster::BroadcastOptions{
         tx_fetch_interval: std::time::Duration::new(5, 0),
         tx_fetch_max_retries: 10,
-        sim_sequence_mismatch_retries: 5,
         gas_adjustment: 1.5,
         gas_price: (0.00005, "ujcs".parse().unwrap()),
     };
@@ -65,7 +66,19 @@ pub async fn run(_cfg: config::Config) -> Result<(), Error> {
     .to_any()
     .unwrap();
 
-    let mut broadcaster = broadcaster::Broadcaster::new(tm_client.clone(), cc, options, priv_key);
+    let chain_id = status.node_info.network;
+    let acc_number = cc.account_number().expect("no acc number");
+    let sequence = cc.sequence().expect("no acc number");
+
+    let mut broadcaster = broadcaster::Broadcaster::new(
+        tm_client,
+        cc,
+        acc_number,
+        sequence,
+        options,
+        priv_key,
+        chain_id,
+    );
     
     let response = broadcaster.broadcast(std::iter::once(msg_send.clone())).await.expect("failed to broadcast first message!");
     println!("{:?}",response);
@@ -73,7 +86,7 @@ pub async fn run(_cfg: config::Config) -> Result<(), Error> {
     let response = broadcaster.broadcast(std::iter::once(msg_send.clone())).await.expect("failed to broadcast second message!");
     println!("{:?}",response);
 
-    tm_client.close().unwrap();
+    //tm_client.close().unwrap();
     let _ = driver_handle.await.unwrap();
 
     Ok(())

@@ -1,8 +1,8 @@
 use std::thread;
 
-use cosmos_sdk_proto::cosmos::tx::v1beta1::{TxRaw, SimulateRequest, SimulateResponse, service_client::ServiceClient};
+use cosmos_sdk_proto::cosmos::tx::v1beta1::TxRaw;
 
-use error_stack::{IntoReport, Report, Result, ResultExt, IntoReportCompat};
+use error_stack::{Report, Result, ResultExt, IntoReportCompat};
 use cosmrs::tx::{BodyBuilder, SignerInfo, Fee, SignDoc, Raw};
 use cosmrs::crypto::{PublicKey,secp256k1::SigningKey};
 use cosmrs::{Coin};
@@ -14,9 +14,6 @@ use tendermint::Hash;
 
 use crate::broadcaster::{BroadcasterError, BroadcasterError::*};
 
-use super::account_client::{AccountClientError};
-
-const SEQ_MISMATCH_CODE: i32 = 32;
 
 pub fn generate_sim_tx<M>(msgs: M, sequence: u64, pub_key: &PublicKey) -> Result<Vec<u8>,BroadcasterError>
 where M: IntoIterator<Item = cosmrs::Any>,
@@ -50,14 +47,14 @@ where M: IntoIterator<Item = cosmrs::Any>,
 }
 
 
-pub async fn wait_for_block_inclusion<C>(tm_client: C, tx_hash:  Hash, fetch_interval: std::time::Duration, max_retries: u32) -> Result<(),BroadcasterError>
-where C: TmClient + Clone,
+pub async fn wait_for_block_inclusion<C>(tm_client: &C, tx_hash: Hash, fetch_interval: std::time::Duration, max_retries: u32) -> Result<(),BroadcasterError>
+where C: TmClient,
 {
     let mut last_error = Report::new(BlockInclusionTimeout);
 
     for _ in 0..max_retries {
         thread::sleep(fetch_interval);
-        match tm_client.clone().get_tx(tx_hash.clone(), true).await {
+        match tm_client.get_tx_height(tx_hash, true).await {
             Ok(_) => return Ok(()),
             Err(err) => {
                 last_error = err.change_context(BlockInclusionTimeout);
@@ -68,26 +65,6 @@ where C: TmClient + Clone,
 
     Err(last_error)
 }
-
-pub async fn simulate(grpc_url: String, tx_bytes: Vec<u8>) -> Result<SimulateResponse,AccountClientError> {
-        let request = SimulateRequest{
-            tx: None,
-            tx_bytes,
-        };
-
-        let mut client = ServiceClient::connect(grpc_url)
-            .await.into_report().change_context(AccountClientError::ConnectionFailed)?;
-
-        match client.simulate(request).await {
-            Ok(response) => Ok(response.into_inner()),
-            Err(err) => {
-                if err.code() == SEQ_MISMATCH_CODE.into() {
-                    return Err(err).into_report().change_context(AccountClientError::AccountSequenceMismatch)
-                } 
-                Err(err).into_report().change_context(AccountClientError::TxSimulationFailed)
-            },
-        }
-    }
 
 #[cfg(test)]
 mod tests {
