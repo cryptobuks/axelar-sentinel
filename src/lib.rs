@@ -23,7 +23,7 @@ pub async fn run(_cfg: config::Config) -> Result<(), Error> {
     //test account
     let address = "axelar1y7zhht60mr392ffkhpdj5tunlcap2rhx3tsnqw";
     let mut cc = GrpcAccountClient::new(String::from(address), String::from(grpc_url));
-    cc.init().await.expect("failed to fetch account info");
+    cc.synch().await.expect("failed to fetch account info");
     let sequence = cc.sequence().unwrap();
     println!("{} current sequence number is {:?}", address, sequence);
 

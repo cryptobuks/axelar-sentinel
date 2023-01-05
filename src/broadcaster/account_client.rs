@@ -32,24 +32,11 @@ pub enum GasEstimatorError {
     TxSimulationFailed,
 }
 
-/*pub struct GrpcGasEstimator{
-    grpc_url: String,
-}
-
-#[async_trait]
-impl GasEstimator for GrpcGasEstimator {
-    async fn estimate_gas(&self, tx_bytes: Vec<u8>) -> Result<u64,AccountClientError> {
-        simulate(self.grpc_url, tx_bytes).await?
-        .gas_info.ok_or(TxSimulationFailed)
-        .map(| info | info.gas_used).into_report()
-    }
-}*/
-
 #[async_trait]
 pub trait AccountInfo {
     fn sequence(&self) -> Option<u64>;
     fn account_number(&self) -> Option<u64>;
-    async fn init(&mut self) -> Result<(),AccountInfoError>;
+    async fn synch(&mut self) -> Result<(),AccountInfoError>;
 }
 
 #[async_trait]
@@ -83,7 +70,7 @@ impl AccountInfo for GrpcAccountClient {
         self.account_info.clone().map(|info | info.account_number)
     }
 
-    async fn init(&mut self) -> Result<(),AccountInfoError> {
+    async fn synch(&mut self) -> Result<(),AccountInfoError> {
         if self.account_info.is_some() {
             return Ok(());
         }
@@ -135,4 +122,3 @@ impl GasEstimator for GrpcAccountClient {
         }
     }
 }
-
