@@ -164,7 +164,6 @@ mod tests {
     use mockall::predicate;
     use tendermint::Hash;
     use tendermint::block::Height;
-    use tendermint::chain::Id;
     use tokio::sync::oneshot;
     use tokio::test;
 
