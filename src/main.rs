@@ -32,8 +32,7 @@ enum Output {
     Json,
 }
 
-#[tokio::main]
-async fn main() -> ExitCode {
+fn main() -> ExitCode {
     let args: Args = Args::parse();
     set_up_logger(&args.output);
 
@@ -41,7 +40,7 @@ async fn main() -> ExitCode {
 
     let cfg = init_config(&args);
 
-    let code = match run(cfg).await {
+    let code = match run(cfg) {
         Ok(_) => ExitCode::SUCCESS,
         Err(report) => {
             let err = LoggableError::from(&report);
