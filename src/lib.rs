@@ -38,13 +38,6 @@ pub async fn run(_cfg: config::Config) -> Result<(), Error> {
     hex::decode_to_slice(PRIV_CONST_KEY, &mut priv_key_bytes).expect("Decoding failed");
     let priv_key = SigningKey::from_bytes(&priv_key_bytes).expect("panic!");
 
-    let options = broadcaster::BroadcastOptions{
-        tx_fetch_interval: std::time::Duration::new(5, 0),
-        tx_fetch_max_retries: 10,
-        gas_adjustment: 1.5,
-        gas_price: (0.00005, "ujcs".parse().unwrap()),
-    };
-
     let account_id = priv_key.public_key().account_id("axelar").unwrap();
 
     let recipient_private_key = SigningKey::random();
@@ -70,15 +63,18 @@ pub async fn run(_cfg: config::Config) -> Result<(), Error> {
     let acc_number = cc.account_number().expect("no acc number");
     let sequence = cc.sequence().expect("no acc number");
 
-    let mut broadcaster = broadcaster::Broadcaster::new(
+    let mut broadcaster = broadcaster::BroadcasterBuilder::new(
         tm_client,
         cc,
-        acc_number,
-        sequence,
-        options,
         priv_key,
-        chain_id,
-    );
+    ).acc_number(acc_number)
+    .acc_sequence(sequence)
+    .chain_id(chain_id)
+    .tx_fetch_interval(std::time::Duration::new(5, 0))
+    .tx_fetch_max_retries(10)
+    .gas_adjustment(1.5)
+    .gas_price((0.00005, "ujcs".parse().unwrap()))
+    .build();
     
     let response = broadcaster.broadcast(std::iter::once(msg_send.clone())).await.expect("failed to broadcast first message!");
     println!("{:?}",response);

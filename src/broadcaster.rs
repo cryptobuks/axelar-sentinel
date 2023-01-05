@@ -16,6 +16,14 @@ use crate::broadcaster::account_client::GasEstimator;
 pub mod account_client;
 mod helpers;
 
+const AXELAR_CHAIN_ID: &str = "axelar-dojo-1";
+const AXL_DENOM: &str = "uaxl";
+const TX_INTERVAL_SECONDS: u64 = 0; 
+const TX_INTERVAL_MILISECONDS: u32 = 500;
+const TX_MAX_RETRIES: u32 = 10;
+const GAS_PRICE: f64 = 0.00005;
+const GAS_ADJUSTMENT: f32 = 1.0;
+
 #[derive(Error, Debug)]
 pub enum BroadcasterError {
     #[error("broadcast failed")]
@@ -28,8 +36,7 @@ pub enum BroadcasterError {
     GasEstimationFailed,
 }
 
-#[derive(Clone)]
-pub struct BroadcastOptions {
+struct BroadcastOptions {
     pub tx_fetch_interval: Duration,
     pub tx_fetch_max_retries: u32,
     pub gas_adjustment: f32,
@@ -46,10 +53,77 @@ pub struct Broadcaster<T: TmClient, G: GasEstimator> {
     options: BroadcastOptions,
 }
 
-impl<T: TmClient, G: GasEstimator> Broadcaster<T,G> {
-    pub fn new(tm_client: T, gas_estimator: G, acc_number: u64, acc_sequence: u64, options: BroadcastOptions, priv_key: SigningKey, chain_id: Id) -> Self {
-        Broadcaster { tm_client, gas_estimator, acc_number, acc_sequence, options, priv_key, chain_id}
+pub struct BroadcasterBuilder<T: TmClient, G: GasEstimator> {
+    tm_client: T,
+    gas_estimator: G,
+    acc_number: u64,
+    acc_sequence: u64,
+    chain_id: Id,
+    priv_key: SigningKey,
+    options: BroadcastOptions,
+}
+
+impl <T: TmClient, G: GasEstimator> BroadcasterBuilder<T,G> {
+    pub fn new(tm_client: T, gas_estimator: G, priv_key: SigningKey) -> Self {
+        BroadcasterBuilder {
+            tm_client,
+            gas_estimator,
+            priv_key,
+            chain_id: AXELAR_CHAIN_ID.parse::<Id>().unwrap(),
+            acc_number: 0,
+            acc_sequence: 0,
+            options: BroadcastOptions {
+                tx_fetch_interval: std::time::Duration::new(TX_INTERVAL_SECONDS, TX_INTERVAL_MILISECONDS),
+                tx_fetch_max_retries: TX_MAX_RETRIES,
+                gas_adjustment: GAS_ADJUSTMENT,
+                gas_price: (GAS_PRICE, AXL_DENOM.parse().unwrap()),
+            }
+        }
     }
+
+    pub fn build(self) -> Broadcaster<T,G> {
+        Broadcaster {
+            tm_client: self.tm_client,
+            gas_estimator: self.gas_estimator,
+            priv_key: self.priv_key,
+            chain_id: self.chain_id,
+            acc_number: self.acc_number,
+            acc_sequence: self.acc_sequence,
+            options: self.options,
+        }
+    }
+
+    pub fn chain_id(mut self, chain_id: Id) -> BroadcasterBuilder<T,G> {
+        self.chain_id = chain_id;
+        self
+    }
+    pub fn acc_number(mut self, acc_number: u64) -> BroadcasterBuilder<T,G> {
+        self.acc_number = acc_number;
+        self
+    }
+    pub fn acc_sequence(mut self, acc_sequence: u64) -> BroadcasterBuilder<T,G> {
+        self.acc_sequence = acc_sequence;
+        self
+    }
+    pub fn tx_fetch_interval(mut self, tx_fetch_interval: Duration) -> BroadcasterBuilder<T,G> {
+        self.options.tx_fetch_interval = tx_fetch_interval;
+        self
+    }
+    pub fn tx_fetch_max_retries(mut self, tx_fetch_max_retries: u32) -> BroadcasterBuilder<T,G> {
+        self.options.tx_fetch_max_retries = tx_fetch_max_retries;
+        self
+    }
+    pub fn gas_adjustment(mut self, gas_adjustment: f32) -> BroadcasterBuilder<T,G> {
+        self.options.gas_adjustment = gas_adjustment;
+        self
+    }
+    pub fn gas_price(mut self, gas_price: (f64, Denom)) -> BroadcasterBuilder<T,G> {
+        self.options.gas_price = gas_price;
+        self
+    }
+}
+
+impl<T: TmClient, G: GasEstimator> Broadcaster<T,G> {
 
     pub async fn broadcast<M>(&mut self, msgs: M) -> Result<BroadcastResponse,BroadcasterError>
     where M: IntoIterator<Item = cosmrs::Any> + Clone,
@@ -103,14 +177,13 @@ mod tests {
     use tendermint::block::Height;
     use tendermint::abci::Code;
     use tendermint::Hash;
-    use tendermint::chain::Id;
 
     use crate::broadcaster::account_client::{GasEstimator, GasEstimatorError};
 
     use futures::Stream;
 
     use crate::tm_client::*;
-    use crate::broadcaster::{Broadcaster,BroadcastOptions, BroadcasterError};
+    use crate::broadcaster::{BroadcasterBuilder, BroadcasterError};
 
     use cosmrs::crypto::secp256k1::SigningKey;
     use cosmrs::Coin;
@@ -163,24 +236,13 @@ mod tests {
         }
         .to_any()
         .unwrap();
-
-        let options = BroadcastOptions{
-            tx_fetch_interval: std::time::Duration::new(0, 10),
-            tx_fetch_max_retries: 10,
-            gas_adjustment: 1.5,
-            gas_price: (0.00005, "uaxl".parse().unwrap()),
-        };
         
-        let chain_id = "axelar-test".parse::<Id>().unwrap();
-        let mut broadcaster = Broadcaster::new(
+        let mut broadcaster = BroadcasterBuilder::new(
             mock_tm_client,
             mock_gas_estimator,
-            10,
-            20,
-            options,
-            priv_key,
-            chain_id,
-        );
+            priv_key
+        ).build();
+
         let response = broadcaster.broadcast(std::iter::once(msg_send.clone())).await;
 
         assert!(response.is_ok())
@@ -221,23 +283,11 @@ mod tests {
         .to_any()
         .unwrap();
 
-        let options = BroadcastOptions{
-            tx_fetch_interval: std::time::Duration::new(0, 10),
-            tx_fetch_max_retries: 10,
-            gas_adjustment: 1.5,
-            gas_price: (0.00005, "uaxl".parse().unwrap()),
-        };
-        
-        let chain_id = "axelar-test".parse::<Id>().unwrap();
-        let mut broadcaster = Broadcaster::new(
+        let mut broadcaster = BroadcasterBuilder::new(
             mock_tm_client,
             mock_gas_estimator,
-            10,
-            20,
-            options,
             priv_key,
-            chain_id,
-        );
+        ).build();
         let response = broadcaster.broadcast(std::iter::once(msg_send.clone())).await;
 
 
@@ -278,24 +328,12 @@ mod tests {
         }
         .to_any()
         .unwrap();
-
-        let options = BroadcastOptions{
-            tx_fetch_interval: std::time::Duration::new(0, 10),
-            tx_fetch_max_retries: 10,
-            gas_adjustment: 1.5,
-            gas_price: (0.00005, "uaxl".parse().unwrap()),
-        };
         
-        let chain_id = "axelar-test".parse::<Id>().unwrap();
-        let mut broadcaster = Broadcaster::new(
+        let mut broadcaster = BroadcasterBuilder::new(
             mock_tm_client,
             mock_gas_estimator,
-            10,
-            20,
-            options,
             priv_key,
-            chain_id,
-        );
+        ).build();
         let response = broadcaster.broadcast(std::iter::once(msg_send.clone())).await;
 
 
@@ -348,24 +386,12 @@ mod tests {
         }
         .to_any()
         .unwrap();
-
-        let options = BroadcastOptions{
-            tx_fetch_interval: std::time::Duration::new(0, 10),
-            tx_fetch_max_retries: 10,
-            gas_adjustment: 1.5,
-            gas_price: (0.00005, "uaxl".parse().unwrap()),
-        };
         
-        let chain_id = "axelar-test".parse::<Id>().unwrap();
-        let mut broadcaster = Broadcaster::new(
+        let mut broadcaster = BroadcasterBuilder::new(
             mock_tm_client,
             mock_gas_estimator,
-            10,
-            20,
-            options,
             priv_key,
-            chain_id,
-        );
+        ).build();
         let response = broadcaster.broadcast(std::iter::once(msg_send.clone())).await;
 
 
