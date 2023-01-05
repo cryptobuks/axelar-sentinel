@@ -18,8 +18,8 @@ mod helpers;
 
 #[derive(Error, Debug)]
 pub enum BroadcasterError {
-    #[error("failed to connect to node")]
-    ConnectionFailed,
+    #[error("broadcast failed")]
+    BroadcastFailed,
     #[error("tx marshaling failed")]
     TxMarshalingFailed,
     #[error("timeout for tx inclusion in block")]
@@ -76,7 +76,7 @@ impl<T: TmClient, G: GasEstimator> Broadcaster<T,G> {
             fee,
             self.chain_id.clone(),
         )?;
-        let response = self.tm_client.broadcast(tx_bytes).await.change_context(ConnectionFailed)?;
+        let response = self.tm_client.broadcast(tx_bytes).await.change_context(BroadcastFailed)?;
 
         helpers::wait_for_block_inclusion(
             &self.tm_client,
