@@ -149,7 +149,7 @@ impl<T: TmClient, G: GasEstimator> Broadcaster<T,G> {
             self.acc_number,
             self.acc_sequence,
             fee,
-            self.chain_id.clone(),
+            &self.chain_id,
         )?;
         let response = self.tm_client.broadcast(tx_bytes).await.change_context(BroadcastFailed)?;
 
@@ -227,9 +227,9 @@ mod tests {
         };
 
         let msg_send = MsgSend {
-            from_address: account_id.clone(),
+            from_address: account_id,
             to_address: recipient_account_id,
-            amount: vec![amount.clone()],
+            amount: vec![amount],
         }
         .to_any()
         .unwrap();
@@ -240,7 +240,7 @@ mod tests {
             priv_key
         ).build();
 
-        let response = broadcaster.broadcast(std::iter::once(msg_send.clone())).await;
+        let response = broadcaster.broadcast(std::iter::once(msg_send)).await;
 
         assert!(response.is_ok())
     }
@@ -271,9 +271,9 @@ mod tests {
         };
 
         let msg_send = MsgSend {
-            from_address: account_id.clone(),
+            from_address: account_id,
             to_address: recipient_account_id,
-            amount: vec![amount.clone()],
+            amount: vec![amount],
         }
         .to_any()
         .unwrap();
@@ -283,7 +283,7 @@ mod tests {
             mock_gas_estimator,
             priv_key,
         ).build();
-        let response = broadcaster.broadcast(std::iter::once(msg_send.clone())).await;
+        let response = broadcaster.broadcast(std::iter::once(msg_send)).await;
 
 
         assert!(matches!(
@@ -315,9 +315,9 @@ mod tests {
         };
 
         let msg_send = MsgSend {
-            from_address: account_id.clone(),
+            from_address: account_id,
             to_address: recipient_account_id,
-            amount: vec![amount.clone()],
+            amount: vec![amount],
         }
         .to_any()
         .unwrap();
@@ -327,7 +327,7 @@ mod tests {
             mock_gas_estimator,
             priv_key,
         ).build();
-        let response = broadcaster.broadcast(std::iter::once(msg_send.clone())).await;
+        let response = broadcaster.broadcast(std::iter::once(msg_send)).await;
 
 
         assert!(matches!(
@@ -371,9 +371,9 @@ mod tests {
         };
 
         let msg_send = MsgSend {
-            from_address: account_id.clone(),
+            from_address: account_id,
             to_address: recipient_account_id,
-            amount: vec![amount.clone()],
+            amount: vec![amount],
         }
         .to_any()
         .unwrap();
@@ -383,7 +383,7 @@ mod tests {
             mock_gas_estimator,
             priv_key,
         ).build();
-        let response = broadcaster.broadcast(std::iter::once(msg_send.clone())).await;
+        let response = broadcaster.broadcast(std::iter::once(msg_send)).await;
 
 
         assert!(matches!(

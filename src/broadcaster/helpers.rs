@@ -8,7 +8,7 @@ use cosmrs::crypto::{PublicKey,secp256k1::SigningKey};
 use cosmrs::{Coin};
 use tendermint::chain::Id;
 
-use crate::tm_client::{TmClient};
+use crate::tm_client::TmClient;
 
 use tendermint::Hash;
 
@@ -34,7 +34,7 @@ where M: IntoIterator<Item = cosmrs::Any>,
     raw.to_bytes().into_report().change_context(TxMarshalingFailed)
 }
 
-pub fn generate_tx<M>(msgs: M, priv_key: &SigningKey, account_number: u64, sequence: u64, fee: Fee, chain_id: Id) -> Result<Vec<u8>,BroadcasterError>
+pub fn generate_tx<M>(msgs: M, priv_key: &SigningKey, account_number: u64, sequence: u64, fee: Fee, chain_id: &Id) -> Result<Vec<u8>,BroadcasterError>
 where M: IntoIterator<Item = cosmrs::Any>,
 {
     let pub_key = priv_key.public_key();
@@ -68,6 +68,8 @@ where C: TmClient,
 
 #[cfg(test)]
 mod tests {
+
+    use tendermint::chain::Id;
 
     use cosmrs::tx::{Fee, Msg};
     use cosmrs::bank::MsgSend;
@@ -145,7 +147,7 @@ mod tests {
         .to_any()
         .unwrap();
     
-        let chain_id = CHAIN_ID.parse().unwrap();
+        let chain_id: Id = CHAIN_ID.parse().unwrap();
         let seq_number = 0;
         let gas = 100_000u64;
         let fee = Fee::from_amount_and_gas(amount, gas);
@@ -156,7 +158,7 @@ mod tests {
             ACC_NUMBER,
             seq_number,
             fee,
-            chain_id
+            &chain_id
         );        
 
         assert!(res.is_ok());
