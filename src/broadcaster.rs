@@ -36,6 +36,7 @@ pub enum BroadcasterError {
     GasEstimationFailed,
 }
 
+#[derive(Debug, Clone)]
 struct BroadcastOptions {
     pub tx_fetch_interval: Duration,
     pub tx_fetch_max_retries: u32,

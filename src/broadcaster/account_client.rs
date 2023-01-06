@@ -48,6 +48,7 @@ pub trait AccountClient: AccountInfo + GasEstimator {
     async fn synch(&mut self) -> Result<(),AccountClientError>;
 }
 
+#[derive(Debug, Clone)]
 pub struct GrpcAccountClient{
     grpc_url: String,
     address: String,
