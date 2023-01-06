@@ -10,14 +10,10 @@ use cosmos_sdk_proto::cosmos::tx::v1beta1::{SimulateRequest, service_client::Ser
 
 const SEQ_MISMATCH_CODE: i32 = 32;
 
-#[derive(Error, Debug)]
-pub enum AccountInfoError {
-    #[error("failed to connect to node")]
-    ConnectionFailed,
-    #[error("remote call failed")]
-    RemoteCallFailed,
-    #[error("failed to unmarshal protobuf")]
-    UnmarshalingFailed,
+pub trait AccountInfo {
+    fn address(&self) -> String;
+    fn sequence(&self) -> u64;
+    fn account_number(&self) -> u64;
 }
 
 #[derive(Error, Debug)]
@@ -33,17 +29,24 @@ pub enum GasEstimatorError {
 }
 
 #[async_trait]
-pub trait AccountInfo {
-    fn sequence(&self) -> Option<u64>;
-    fn account_number(&self) -> Option<u64>;
-    async fn synch(&mut self) -> Result<(),AccountInfoError>;
-}
-
-#[async_trait]
 pub trait GasEstimator {
     async fn estimate_gas(&self, tx_bytes: Vec<u8>) -> Result<u64,GasEstimatorError>;
 }
 
+#[derive(Error, Debug)]
+pub enum AccountClientError {
+    #[error("failed to connect to node")]
+    ConnectionFailed,
+    #[error("remote call failed")]
+    RemoteCallFailed,
+    #[error("failed to unmarshal protobuf")]
+    UnmarshalingFailed,
+}
+
+#[async_trait]
+pub trait AccountClient: AccountInfo + GasEstimator {
+    async fn synch(&mut self) -> Result<(),AccountClientError>;
+}
 
 pub struct GrpcAccountClient{
     grpc_url: String,
@@ -60,38 +63,17 @@ impl GrpcAccountClient{
     }
 }
 
-#[async_trait]
 impl AccountInfo for GrpcAccountClient {
-    fn sequence(&self) -> Option<u64> {
-       self.account_info.clone().map(|info | info.sequence)
+    fn address(&self) -> String {
+        self.address.clone()
     }
 
-    fn account_number(&self) -> Option<u64> {
-        self.account_info.clone().map(|info | info.account_number)
+    fn sequence(&self) -> u64{
+       self.account_info.as_ref().map_or(0, |info | info.sequence)
     }
 
-    async fn synch(&mut self) -> Result<(),AccountInfoError> {
-        if self.account_info.is_some() {
-            return Ok(());
-        }
-
-        let request = QueryAccountRequest{address: self.address.clone()};
-
-        let mut client = AuthQueryClient::connect(self.grpc_url.clone())
-            .await.into_report().change_context(AccountInfoError::ConnectionFailed)?;
-
-        let response = client.account(request)
-            .await.into_report().change_context(AccountInfoError::RemoteCallFailed)?;
-
-        let account = response.into_inner().account
-            .ok_or(AccountInfoError::UnmarshalingFailed).into_report().and_then(| account | {
-                BaseAccount::decode(&account.value[..])
-                .into_report().change_context(AccountInfoError::UnmarshalingFailed)
-            })?;
-
-        self.account_info = Some(account);
-        Ok(())
-
+    fn account_number(&self) -> u64 {
+        self.account_info.as_ref().map_or(0, |info | info.account_number)
     }
 }
 
@@ -121,4 +103,29 @@ impl GasEstimator for GrpcAccountClient {
             },
         }
     }
+}
+#[async_trait]
+impl AccountClient for GrpcAccountClient{
+    async fn synch(&mut self) -> Result<(),AccountClientError> {
+        if self.account_info.is_some() {
+            return Ok(());
+        }
+
+        let request = QueryAccountRequest{address: self.address.clone()};
+
+        let mut client = AuthQueryClient::connect(self.grpc_url.clone())
+            .await.into_report().change_context(AccountClientError::ConnectionFailed)?;
+
+        let response = client.account(request)
+            .await.into_report().change_context(AccountClientError::RemoteCallFailed)?;
+
+        let account = response.into_inner().account
+            .ok_or(AccountClientError::UnmarshalingFailed).into_report().and_then(| account | {
+                BaseAccount::decode(&account.value[..])
+                .into_report().change_context(AccountClientError::UnmarshalingFailed)
+            })?;
+
+        self.account_info = Some(account);
+        Ok(())
+        }
 }
