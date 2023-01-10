@@ -1,24 +1,23 @@
-
 use std::time::Duration;
 
 use error_stack::{Result, ResultExt};
 use thiserror::Error;
 
-use cosmrs::tx::Fee;
 use cosmrs::crypto::secp256k1::SigningKey;
+use cosmrs::tx::Fee;
 use cosmrs::Denom;
 use tendermint::chain::Id;
 
-use crate::broadcaster::BroadcasterError::*;
-use crate::tm_client::{TmClient, BroadcastResponse};
 use crate::broadcaster::account_client::GasEstimator;
+use crate::broadcaster::BroadcasterError::*;
+use crate::tm_client::{BroadcastResponse, TmClient};
 
 pub mod account_client;
 mod helpers;
 
 const AXELAR_CHAIN_ID: &str = "axelar-dojo-1";
 const AXL_DENOM: &str = "uaxl";
-const TX_INTERVAL_SECONDS: u64 = 0; 
+const TX_INTERVAL_SECONDS: u64 = 0;
 const TX_INTERVAL_MILISECONDS: u32 = 500;
 const TX_MAX_RETRIES: u32 = 10;
 const GAS_PRICE: f64 = 0.00005;
@@ -64,7 +63,7 @@ pub struct BroadcasterBuilder<T: TmClient, G: GasEstimator> {
     options: BroadcastOptions,
 }
 
-impl <T: TmClient, G: GasEstimator> BroadcasterBuilder<T,G> {
+impl<T: TmClient, G: GasEstimator> BroadcasterBuilder<T, G> {
     pub fn new(tm_client: T, gas_estimator: G, priv_key: SigningKey) -> Self {
         BroadcasterBuilder {
             tm_client,
@@ -78,11 +77,11 @@ impl <T: TmClient, G: GasEstimator> BroadcasterBuilder<T,G> {
                 tx_fetch_max_retries: TX_MAX_RETRIES,
                 gas_adjustment: GAS_ADJUSTMENT,
                 gas_price: (GAS_PRICE, AXL_DENOM.parse().unwrap()),
-            }
+            },
         }
     }
 
-    pub fn build(self) -> Broadcaster<T,G> {
+    pub fn build(self) -> Broadcaster<T, G> {
         Broadcaster {
             tm_client: self.tm_client,
             gas_estimator: self.gas_estimator,
@@ -94,56 +93,60 @@ impl <T: TmClient, G: GasEstimator> BroadcasterBuilder<T,G> {
         }
     }
 
-    pub fn chain_id(mut self, chain_id: Id) -> BroadcasterBuilder<T,G> {
+    pub fn chain_id(mut self, chain_id: Id) -> BroadcasterBuilder<T, G> {
         self.chain_id = chain_id;
         self
     }
-    pub fn acc_number(mut self, acc_number: u64) -> BroadcasterBuilder<T,G> {
+    pub fn acc_number(mut self, acc_number: u64) -> BroadcasterBuilder<T, G> {
         self.acc_number = acc_number;
         self
     }
-    pub fn acc_sequence(mut self, acc_sequence: u64) -> BroadcasterBuilder<T,G> {
+    pub fn acc_sequence(mut self, acc_sequence: u64) -> BroadcasterBuilder<T, G> {
         self.acc_sequence = acc_sequence;
         self
     }
-    pub fn tx_fetch_interval(mut self, tx_fetch_interval: Duration) -> BroadcasterBuilder<T,G> {
+    pub fn tx_fetch_interval(mut self, tx_fetch_interval: Duration) -> BroadcasterBuilder<T, G> {
         self.options.tx_fetch_interval = tx_fetch_interval;
         self
     }
-    pub fn tx_fetch_max_retries(mut self, tx_fetch_max_retries: u32) -> BroadcasterBuilder<T,G> {
+    pub fn tx_fetch_max_retries(mut self, tx_fetch_max_retries: u32) -> BroadcasterBuilder<T, G> {
         self.options.tx_fetch_max_retries = tx_fetch_max_retries;
         self
     }
-    pub fn gas_adjustment(mut self, gas_adjustment: f32) -> BroadcasterBuilder<T,G> {
+    pub fn gas_adjustment(mut self, gas_adjustment: f32) -> BroadcasterBuilder<T, G> {
         self.options.gas_adjustment = gas_adjustment;
         self
     }
-    pub fn gas_price(mut self, gas_price: (f64, Denom)) -> BroadcasterBuilder<T,G> {
+    pub fn gas_price(mut self, gas_price: (f64, Denom)) -> BroadcasterBuilder<T, G> {
         self.options.gas_price = gas_price;
         self
     }
 }
 
-impl<T: TmClient, G: GasEstimator> Broadcaster<T,G> {
-
-    pub async fn broadcast<M>(&mut self, msgs: M) -> Result<BroadcastResponse,BroadcasterError>
-    where M: IntoIterator<Item = cosmrs::Any> + Clone,
+impl<T: TmClient, G: GasEstimator> Broadcaster<T, G> {
+    pub async fn broadcast<M>(&mut self, msgs: M) -> Result<BroadcastResponse, BroadcasterError>
+    where
+        M: IntoIterator<Item = cosmrs::Any> + Clone,
     {
         let tx_bytes = helpers::generate_sim_tx(msgs.clone(), self.acc_sequence, &self.priv_key.public_key())?;
-        let estimated_gas = self.gas_estimator.estimate_gas(tx_bytes).await.change_context(GasEstimationFailed)?;
+        let estimated_gas = self
+            .gas_estimator
+            .estimate_gas(tx_bytes)
+            .await
+            .change_context(GasEstimationFailed)?;
         let mut gas_limit = estimated_gas;
         if self.options.gas_adjustment > 0.0 {
             gas_limit = (gas_limit as f64 * self.options.gas_adjustment as f64) as u64;
         }
 
-        let (value,denom) = self.options.gas_price.clone();
-        let amount = cosmrs::Coin{
-            amount:  (gas_limit as f64 * value).ceil() as u128,
+        let (value, denom) = self.options.gas_price.clone();
+        let amount = cosmrs::Coin {
+            amount: (gas_limit as f64 * value).ceil() as u128,
             denom: denom,
         };
 
         let fee = Fee::from_amount_and_gas(amount, gas_limit);
-        let tx_bytes= helpers::generate_tx(
+        let tx_bytes = helpers::generate_tx(
             msgs,
             &self.priv_key,
             self.acc_number,
@@ -151,18 +154,22 @@ impl<T: TmClient, G: GasEstimator> Broadcaster<T,G> {
             fee,
             &self.chain_id,
         )?;
-        let response = self.tm_client.broadcast(tx_bytes).await.change_context(BroadcastFailed)?;
+        let response = self
+            .tm_client
+            .broadcast(tx_bytes)
+            .await
+            .change_context(BroadcastFailed)?;
 
         helpers::wait_for_block_inclusion(
             &self.tm_client,
             response.hash,
             self.options.tx_fetch_interval,
             self.options.tx_fetch_max_retries,
-        ).await?;
+        )
+        .await?;
 
         self.acc_sequence += 1;
         Ok(response)
-
     }
 }
 
@@ -171,55 +178,53 @@ mod tests {
     use std::pin::Pin;
     use std::task::{Context, Poll};
 
-    use mockall::mock;
     use async_trait::async_trait;
-    use error_stack::{Report,Result};
+    use error_stack::{Report, Result};
+    use mockall::mock;
 
-    use tendermint::block::Height;
     use tendermint::abci::Code;
+    use tendermint::block::Height;
     use tendermint::Hash;
 
     use crate::broadcaster::account_client::{GasEstimator, GasEstimatorError};
 
     use futures::Stream;
 
-    use crate::tm_client::*;
     use crate::broadcaster::{BroadcasterBuilder, BroadcasterError};
+    use crate::tm_client::*;
 
-    use cosmrs::crypto::secp256k1::SigningKey;
-    use cosmrs::Coin;
     use cosmrs::bank::MsgSend;
+    use cosmrs::crypto::secp256k1::SigningKey;
     use cosmrs::tx::Msg;
+    use cosmrs::Coin;
 
     use tokio::test;
 
     #[test]
     async fn broadcast_successful() {
         let mut mock_tm_client = MockWebsocketClient::new();
-        mock_tm_client.expect_broadcast()
-        .returning(|_| Ok(BroadcastResponse{
-            code: Code::Ok,
-            log: String::from(""),
-            data: "".into(),
-            hash: Hash::None,
-        }));
+        mock_tm_client.expect_broadcast().returning(|_| {
+            Ok(BroadcastResponse {
+                code: Code::Ok,
+                log: String::from(""),
+                data: "".into(),
+                hash: Hash::None,
+            })
+        });
 
-        mock_tm_client.expect_get_tx_height()
-        .returning(|_,_| Ok(Height::from(1000000_u32)));
+        mock_tm_client
+            .expect_get_tx_height()
+            .returning(|_, _| Ok(Height::from(1000000_u32)));
 
         let mut mock_gas_estimator = MockGasEstimator::new();
 
-        mock_gas_estimator.expect_estimate_gas()
-        .returning(|_| Ok(1000));
+        mock_gas_estimator.expect_estimate_gas().returning(|_| Ok(1000));
 
         let priv_key = SigningKey::random();
         let account_id = priv_key.public_key().account_id("axelar").unwrap();
 
         let recipient_private_key = SigningKey::random();
-        let recipient_account_id = recipient_private_key
-            .public_key()
-            .account_id("axelar")
-            .unwrap();
+        let recipient_account_id = recipient_private_key.public_key().account_id("axelar").unwrap();
 
         let amount = Coin {
             amount: 1u8.into(),
@@ -233,12 +238,8 @@ mod tests {
         }
         .to_any()
         .unwrap();
-        
-        let mut broadcaster = BroadcasterBuilder::new(
-            mock_tm_client,
-            mock_gas_estimator,
-            priv_key
-        ).build();
+
+        let mut broadcaster = BroadcasterBuilder::new(mock_tm_client, mock_gas_estimator, priv_key).build();
 
         let response = broadcaster.broadcast(std::iter::once(msg_send)).await;
 
@@ -250,20 +251,17 @@ mod tests {
         let mut mock_tm_client = MockWebsocketClient::new();
         let mut mock_gas_estimator = MockGasEstimator::new();
 
-        mock_tm_client.expect_broadcast()
-        .returning(|_| Err(Report::new(TmClientError::client_internal("internal failure".into()))));
+        mock_tm_client
+            .expect_broadcast()
+            .returning(|_| Err(Report::new(TmClientError::client_internal("internal failure".into()))));
 
-        mock_gas_estimator.expect_estimate_gas()
-        .returning(|_| Ok(1000));
+        mock_gas_estimator.expect_estimate_gas().returning(|_| Ok(1000));
 
         let priv_key = SigningKey::random();
         let account_id = priv_key.public_key().account_id("axelar").unwrap();
 
         let recipient_private_key = SigningKey::random();
-        let recipient_account_id = recipient_private_key
-            .public_key()
-            .account_id("axelar")
-            .unwrap();
+        let recipient_account_id = recipient_private_key.public_key().account_id("axelar").unwrap();
 
         let amount = Coin {
             amount: 1u8.into(),
@@ -278,36 +276,29 @@ mod tests {
         .to_any()
         .unwrap();
 
-        let mut broadcaster = BroadcasterBuilder::new(
-            mock_tm_client,
-            mock_gas_estimator,
-            priv_key,
-        ).build();
+        let mut broadcaster = BroadcasterBuilder::new(mock_tm_client, mock_gas_estimator, priv_key).build();
         let response = broadcaster.broadcast(std::iter::once(msg_send)).await;
-
 
         assert!(matches!(
             response.unwrap_err().current_context(),
             BroadcasterError::BroadcastFailed
         ));
     }
-    
+
     #[test]
     async fn broadcast_failed_seq_mismatch() {
         let mock_tm_client = MockWebsocketClient::new();
         let mut mock_gas_estimator = MockGasEstimator::new();
 
-        mock_gas_estimator.expect_estimate_gas()
-        .returning(|_| Err(Report::new(GasEstimatorError::AccountSequenceMismatch)));
+        mock_gas_estimator
+            .expect_estimate_gas()
+            .returning(|_| Err(Report::new(GasEstimatorError::AccountSequenceMismatch)));
 
         let priv_key = SigningKey::random();
         let account_id = priv_key.public_key().account_id("axelar").unwrap();
 
         let recipient_private_key = SigningKey::random();
-        let recipient_account_id = recipient_private_key
-            .public_key()
-            .account_id("axelar")
-            .unwrap();
+        let recipient_account_id = recipient_private_key.public_key().account_id("axelar").unwrap();
 
         let amount = Coin {
             amount: 1u8.into(),
@@ -321,49 +312,41 @@ mod tests {
         }
         .to_any()
         .unwrap();
-        
-        let mut broadcaster = BroadcasterBuilder::new(
-            mock_tm_client,
-            mock_gas_estimator,
-            priv_key,
-        ).build();
-        let response = broadcaster.broadcast(std::iter::once(msg_send)).await;
 
+        let mut broadcaster = BroadcasterBuilder::new(mock_tm_client, mock_gas_estimator, priv_key).build();
+        let response = broadcaster.broadcast(std::iter::once(msg_send)).await;
 
         assert!(matches!(
             response.unwrap_err().current_context(),
             BroadcasterError::GasEstimationFailed
         ));
     }
-    
 
     #[test]
     async fn broadcast_failed_block_inclusion() {
         let mut mock_tm_client = MockWebsocketClient::new();
-        mock_tm_client.expect_broadcast()
-        .returning(|_| Ok(BroadcastResponse{
-            code: Code::Ok,
-            log: String::from(""),
-            data: "".into(),
-            hash: Hash::None,
-        }));
+        mock_tm_client.expect_broadcast().returning(|_| {
+            Ok(BroadcastResponse {
+                code: Code::Ok,
+                log: String::from(""),
+                data: "".into(),
+                hash: Hash::None,
+            })
+        });
 
-        mock_tm_client.expect_get_tx_height()
-        .returning(|_,_| Err(Report::new(TmClientError::client_internal("tx not found".into()))));
+        mock_tm_client
+            .expect_get_tx_height()
+            .returning(|_, _| Err(Report::new(TmClientError::client_internal("tx not found".into()))));
 
         let mut mock_gas_estimator = MockGasEstimator::new();
 
-        mock_gas_estimator.expect_estimate_gas()
-        .returning(|_| Ok(1000));
+        mock_gas_estimator.expect_estimate_gas().returning(|_| Ok(1000));
 
         let priv_key = SigningKey::random();
         let account_id = priv_key.public_key().account_id("axelar").unwrap();
 
         let recipient_private_key = SigningKey::random();
-        let recipient_account_id = recipient_private_key
-            .public_key()
-            .account_id("axelar")
-            .unwrap();
+        let recipient_account_id = recipient_private_key.public_key().account_id("axelar").unwrap();
 
         let amount = Coin {
             amount: 1u8.into(),
@@ -377,14 +360,9 @@ mod tests {
         }
         .to_any()
         .unwrap();
-        
-        let mut broadcaster = BroadcasterBuilder::new(
-            mock_tm_client,
-            mock_gas_estimator,
-            priv_key,
-        ).build();
-        let response = broadcaster.broadcast(std::iter::once(msg_send)).await;
 
+        let mut broadcaster = BroadcasterBuilder::new(mock_tm_client, mock_gas_estimator, priv_key).build();
+        let response = broadcaster.broadcast(std::iter::once(msg_send)).await;
 
         assert!(matches!(
             response.unwrap_err().current_context(),

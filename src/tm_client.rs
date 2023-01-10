@@ -2,8 +2,8 @@ use async_trait::async_trait;
 use error_stack::{Report, Result};
 use futures::TryFutureExt;
 
-use tendermint::Hash;
 use tendermint::block::Height;
+use tendermint::Hash;
 use tendermint_rpc::{Client, Subscription, SubscriptionClient, WebSocketClient};
 
 use tokio_stream::Stream;
@@ -24,7 +24,7 @@ pub trait TmClient {
     async fn subscribe(&self, query: Query) -> Result<Self::Sub, TmClientError>;
     async fn block_results(&self, block_height: Height) -> Result<BlockResponse, TmClientError>;
     async fn broadcast(&self, tx_raw: Vec<u8>) -> Result<BroadcastResponse, TmClientError>;
-    async fn get_tx_height(&self, tx_hash: Hash, prove: bool) -> Result<Height,TmClientError>;
+    async fn get_tx_height(&self, tx_hash: Hash, prove: bool) -> Result<Height, TmClientError>;
     fn close(self) -> Result<(), TmClientError>;
 }
 
@@ -45,7 +45,7 @@ impl TmClient for WebSocketClient {
     fn close(self) -> Result<(), TmClientError> {
         SubscriptionClient::close(self).map_err(Report::new)
     }
-    async fn get_tx_height(&self, tx_hash: Hash, prove: bool) -> Result<Height,TmClientError> {
+    async fn get_tx_height(&self, tx_hash: Hash, prove: bool) -> Result<Height, TmClientError> {
         Ok(Client::tx(self, tx_hash, prove).map_err(Report::new).await?.height)
     }
 }

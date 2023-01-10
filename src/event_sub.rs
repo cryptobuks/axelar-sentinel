@@ -162,8 +162,8 @@ mod tests {
     use futures::Stream;
     use mockall::mock;
     use mockall::predicate;
-    use tendermint::Hash;
     use tendermint::block::Height;
+    use tendermint::Hash;
     use tokio::sync::oneshot;
     use tokio::test;
 
