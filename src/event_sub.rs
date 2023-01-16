@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::convert::TryInto;
 
 use error_stack::{FutureExt, Report, Result};
 use error_stack::{IntoReport, ResultExt};
@@ -60,18 +59,23 @@ pub struct EventSubClient<T: TmClient + Sync> {
 }
 
 impl<T: TmClient + Sync> EventSubClient<T> {
-    pub fn new(client: T, capacity: usize, start_from: Option<block::Height>) -> (Self, EventSubClientDriver) {
+    pub fn new(client: T, capacity: usize) -> (Self, EventSubClientDriver) {
         let (close_tx, close_rx) = oneshot::channel();
         let client_driver = EventSubClientDriver { close_tx };
         let client = EventSubClient {
             client,
             capacity,
-            start_from,
+            start_from: None,
             tx: None,
             close_rx,
         };
 
         (client, client_driver)
+    }
+
+    pub fn start_from(mut self, height: block::Height) -> Self {
+        self.start_from = Some(height);
+        self
     }
 
     pub fn sub(&mut self) -> BroadcastStream<Event> {
@@ -99,6 +103,7 @@ impl<T: TmClient + Sync> EventSubClient<T> {
                     .block
                     .header()
                     .height;
+
                 self.process_blocks(tx, self.start_from.unwrap_or(latest_block_height), latest_block_height)
                     .await?;
 
@@ -140,10 +145,12 @@ impl<T: TmClient + Sync> EventSubClient<T> {
         from: block::Height,
         to: block::Height,
     ) -> Result<(), EventSubError> {
-        for height in from.value()..(to.value() + 1) {
-            self.process_block(tx, height.try_into().unwrap())
-                .attach_printable(format!("{{ block_height = {height} }}"))
+        let mut height = from;
+        while height <= to {
+            self.process_block(tx, from)
+                .attach_printable(format!("{{ block_height = {from} }}"))
                 .await?;
+            height = height.increment();
         }
 
         Ok(())
@@ -212,7 +219,7 @@ mod tests {
 
     #[test]
     async fn no_subscriber() {
-        let (client, _) = EventSubClient::new(MockWebsocketClient::new(), 10, None);
+        let (client, _) = EventSubClient::new(MockWebsocketClient::new(), 10);
         let res = client.run().await;
         assert!(matches!(
             res.unwrap_err().current_context(),
@@ -236,7 +243,8 @@ mod tests {
         mock_client
             .expect_subscribe()
             .returning(|_| Err(tm_client::Error::client_internal("internal failure".into())).into_report());
-        let (mut client, _) = EventSubClient::new(mock_client, 10, Some(start_from));
+        let (mut client, _) = EventSubClient::new(mock_client, 10);
+        client = client.start_from(start_from);
         let _ = client.sub();
         let res = client.run().await;
         assert!(matches!(
@@ -304,7 +312,8 @@ mod tests {
 
         let (done_tx, done_rx) = oneshot::channel::<()>();
 
-        let (mut client, client_driver) = EventSubClient::new(mock_client, event_count, Some(block_height));
+        let (mut client, client_driver) = EventSubClient::new(mock_client, event_count);
+        client = client.start_from(block_height);
         let mut event_stream = client.sub();
         let event_stream_handle = tokio::spawn(async move {
             let mut count = 0;
