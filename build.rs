@@ -7,6 +7,6 @@ fn main() -> Result<()> {
             "proto/tofnd/grpc.proto",
             "proto/tofnd/multisig.proto"
         ],
-        &["third_party/", "proto/tofnd/", "proto/"])?;
+        &["cosmos-sdk-go/proto/", "tendermint/proto/", "third_party/", "proto/tofnd/", "proto/"])?;
     Ok(())
 }
