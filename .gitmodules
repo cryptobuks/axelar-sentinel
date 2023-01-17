@@ -1,0 +1,6 @@
+[submodule "third_party/tendermint"]
+	path = third_party/tendermint
+	url = https://github.com/tendermint/tendermint
+[submodule "third_party/cosmos-sdk"]
+	path = third_party/cosmos-sdk
+	url = https://github.com/cosmos/cosmos-sdk/
