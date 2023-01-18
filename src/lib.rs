@@ -6,6 +6,9 @@ pub mod config;
 pub mod event_sub;
 pub mod report;
 pub mod tm_client;
+pub mod tofnd {
+    include!(concat!(env!("OUT_DIR"), "/tofnd.rs"));
+}
 pub mod axelar {
     pub mod utils {
         pub mod v1beta1 {
