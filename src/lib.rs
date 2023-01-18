@@ -40,7 +40,7 @@ pub mod axelar {
         pub mod v1beta1 {
             include!(concat!(env!("OUT_DIR"), "/axelar.multisig.v1beta1.rs"));
         }
-    }    
+    }
     pub mod evm {
         pub mod v1beta1 {
             include!(concat!(env!("OUT_DIR"), "/axelar.evm.v1beta1.rs"));
