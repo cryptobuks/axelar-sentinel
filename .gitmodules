@@ -4,3 +4,6 @@
 [submodule "third_party/cosmos-sdk"]
 	path = third_party/cosmos-sdk
 	url = https://github.com/cosmos/cosmos-sdk/
+[submodule "axelar-core"]
+	path = axelar-core
+	url = https://github.com/axelarnetwork/axelar-core
